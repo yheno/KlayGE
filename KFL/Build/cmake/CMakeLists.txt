@@ -74,6 +74,9 @@ SET(MATH_HEADER_FILES
 	${KFL_PROJECT_DIR}/include/KFL/Plane.hpp
 	${KFL_PROJECT_DIR}/include/KFL/Quaternion.hpp
 	${KFL_PROJECT_DIR}/include/KFL/Rect.hpp
+	${KFL_PROJECT_DIR}/include/KFL/SIMDMath.hpp
+	${KFL_PROJECT_DIR}/include/KFL/SIMDMatrix.hpp
+	${KFL_PROJECT_DIR}/include/KFL/SIMDVector.hpp
 	${KFL_PROJECT_DIR}/include/KFL/Size.hpp
 	${KFL_PROJECT_DIR}/include/KFL/Sphere.hpp
 	${KFL_PROJECT_DIR}/include/KFL/Vector.hpp
@@ -90,6 +93,9 @@ SET(MATH_SOURCE_FILES
 	${KFL_PROJECT_DIR}/src/Math/Plane.cpp
 	${KFL_PROJECT_DIR}/src/Math/Quaternion.cpp
 	${KFL_PROJECT_DIR}/src/Math/Rect.cpp
+	${KFL_PROJECT_DIR}/src/Math/SIMDMath.cpp
+	${KFL_PROJECT_DIR}/src/Math/SIMDMatrix.cpp
+	${KFL_PROJECT_DIR}/src/Math/SIMDVector.cpp
 	${KFL_PROJECT_DIR}/src/Math/Size.cpp
 	${KFL_PROJECT_DIR}/src/Math/Sphere.cpp
 )
