@@ -367,7 +367,7 @@ namespace KlayGE
 				break;
 
 			case REDT_texture1DArray:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -376,7 +376,7 @@ namespace KlayGE
 				break;
 
 			case REDT_texture2DArray:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -385,7 +385,7 @@ namespace KlayGE
 				break;
 
 			case REDT_textureCUBEArray:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -394,7 +394,7 @@ namespace KlayGE
 				break;
 
 			case REDT_buffer:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -407,7 +407,7 @@ namespace KlayGE
 				break;
 
 			case REDT_structured_buffer:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -416,14 +416,14 @@ namespace KlayGE
 				break;
 
 			case REDT_byte_address_buffer:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					ss << "ByteAddressBuffer " << *param.Name() << ";" << std::endl;
 				}
 				break;
 
 			case REDT_rw_buffer:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -432,7 +432,7 @@ namespace KlayGE
 				break;
 
 			case REDT_rw_structured_buffer:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -441,7 +441,7 @@ namespace KlayGE
 				break;
 
 			case REDT_rw_texture1D:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -450,7 +450,7 @@ namespace KlayGE
 				break;
 
 			case REDT_rw_texture2D:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -459,7 +459,7 @@ namespace KlayGE
 				break;
 
 			case REDT_rw_texture3D:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -467,7 +467,7 @@ namespace KlayGE
 				}
 				break;
 			case REDT_rw_texture1DArray:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -476,7 +476,7 @@ namespace KlayGE
 				break;
 
 			case REDT_rw_texture2DArray:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -485,14 +485,14 @@ namespace KlayGE
 				break;
 
 			case REDT_rw_byte_address_buffer:
-				if (caps.max_shader_model >= 4)
+				if (caps.max_shader_model >= ShaderModel(4, 0))
 				{
 					ss << "RWByteAddressBuffer " << *param.Name() << ";" << std::endl;
 				}
 				break;
 
 			case REDT_append_structured_buffer:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -501,7 +501,7 @@ namespace KlayGE
 				break;
 
 			case REDT_consume_structured_buffer:
-				if (caps.max_shader_model >= 5)
+				if (caps.max_shader_model >= ShaderModel(5, 0))
 				{
 					std::string elem_type;
 					param.Var()->Value(elem_type);
@@ -554,7 +554,7 @@ namespace KlayGE
 			break;
 
 		case ST_GeometryShader:
-			if (caps.max_shader_model >= 4)
+			if (caps.gs_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
@@ -564,7 +564,7 @@ namespace KlayGE
 			break;
 
 		case ST_ComputeShader:
-			if (caps.max_shader_model >= 4)
+			if (caps.cs_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
@@ -574,7 +574,7 @@ namespace KlayGE
 			break;
 
 		case ST_HullShader:
-			if (caps.max_shader_model >= 5)
+			if (caps.hs_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
@@ -584,7 +584,7 @@ namespace KlayGE
 			break;
 
 		case ST_DomainShader:
-			if (caps.max_shader_model >= 5)
+			if (caps.ds_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
@@ -867,7 +867,7 @@ namespace KlayGE
 		D3D_FEATURE_LEVEL feature_level = render_eng.DeviceFeatureLevel();
 		RenderDeviceCaps const & caps = render_eng.DeviceCaps();
 
-		std::string max_sm_str = boost::lexical_cast<std::string>(static_cast<int>(caps.max_shader_model));
+		std::string max_sm_str = boost::lexical_cast<std::string>(caps.max_shader_model.FullVersion());
 		std::string max_tex_array_str = boost::lexical_cast<std::string>(caps.max_texture_array_length);
 		std::string max_tex_depth_str = boost::lexical_cast<std::string>(caps.max_texture_depth);
 		std::string max_tex_units_str = boost::lexical_cast<std::string>(static_cast<int>(caps.max_pixel_texture_units));
@@ -900,62 +900,62 @@ namespace KlayGE
 			break;
 
 		case ST_GeometryShader:
-			if (caps.max_shader_model < 4)
-			{
-				is_shader_validate_[type] = false;
-			}
-			else
+			if (caps.gs_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
 					shader_profile = render_eng.GeometryShaderProfile();
 				}
 			}
+			else
+			{
+				is_shader_validate_[type] = false;				
+			}
 			break;
 
 		case ST_ComputeShader:
-			if (caps.max_shader_model < 4)
-			{
-				is_shader_validate_[type] = false;
-			}
-			else
+			if (caps.cs_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
 					shader_profile = render_eng.ComputeShaderProfile();
 				}
-				if ((CT_HASH("cs_5_0") == shader_profile_hash) && (caps.max_shader_model < 5))
+				if ((CT_HASH("cs_5_0") == shader_profile_hash) && (caps.max_shader_model < ShaderModel(5, 0)))
 				{
 					is_shader_validate_[type] = false;
 				}
 			}
-			break;
-
-		case ST_HullShader:
-			if (caps.max_shader_model < 5)
+			else
 			{
 				is_shader_validate_[type] = false;
 			}
-			else
+			break;
+
+		case ST_HullShader:
+			if (caps.hs_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
 					shader_profile = render_eng.HullShaderProfile();
 				}
 			}
-			break;
-
-		case ST_DomainShader:
-			if (caps.max_shader_model < 5)
+			else
 			{
 				is_shader_validate_[type] = false;
 			}
-			else
+			break;
+
+		case ST_DomainShader:
+			if (caps.ds_support)
 			{
 				if (CT_HASH("auto") == shader_profile_hash)
 				{
 					shader_profile = render_eng.DomainShaderProfile();
 				}
+			}
+			else
+			{
+				is_shader_validate_[type] = false;
 			}
 			break;
 
@@ -1354,8 +1354,9 @@ namespace KlayGE
 
 			ShaderDesc const & sd = effect.GetShaderDesc(shader_desc_ids[type]);
 
-			int shader_ver = ("auto" == sd.profile) ? 0 : sd.profile[3] - '0';
-			if (shader_ver > caps.max_shader_model)
+			uint8_t shader_major_ver = ("auto" == sd.profile) ? 0 : static_cast<uint8_t>(sd.profile[3] - '0');
+			uint8_t shader_minor_ver = ("auto" == sd.profile) ? 0 : static_cast<uint8_t>(sd.profile[5] - '0');
+			if (ShaderModel(shader_major_ver, shader_minor_ver) > caps.max_shader_model)
 			{
 				is_shader_validate_[type] = false;
 			}
@@ -1385,7 +1386,7 @@ namespace KlayGE
 									}
 
 									UINT rasterized_stream = 0;
-									if ((caps.max_shader_model >= 5) && (effect.GetShaderDesc(shader_desc_ids[ST_PixelShader]).func_name.empty()))
+									if ((caps.max_shader_model >= ShaderModel(5, 0)) && (effect.GetShaderDesc(shader_desc_ids[ST_PixelShader]).func_name.empty()))
 									{
 										rasterized_stream = D3D11_SO_NO_RASTERIZED_STREAM;
 									}
@@ -1452,7 +1453,7 @@ namespace KlayGE
 							}
 
 							UINT rasterized_stream = 0;
-							if ((caps.max_shader_model >= 5) && (effect.GetShaderDesc(shader_desc_ids[ST_PixelShader]).func_name.empty()))
+							if ((caps.max_shader_model >= ShaderModel(5, 0)) && (effect.GetShaderDesc(shader_desc_ids[ST_PixelShader]).func_name.empty()))
 							{
 								rasterized_stream = D3D11_SO_NO_RASTERIZED_STREAM;
 							}
@@ -1540,7 +1541,7 @@ namespace KlayGE
 									}
 
 									UINT rasterized_stream = 0;
-									if ((caps.max_shader_model >= 5) && (effect.GetShaderDesc(shader_desc_ids[ST_PixelShader]).func_name.empty()))
+									if ((caps.max_shader_model >= ShaderModel(5, 0)) && (effect.GetShaderDesc(shader_desc_ids[ST_PixelShader]).func_name.empty()))
 									{
 										rasterized_stream = D3D11_SO_NO_RASTERIZED_STREAM;
 									}
