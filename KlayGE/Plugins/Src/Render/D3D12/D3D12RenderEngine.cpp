@@ -1712,19 +1712,21 @@ namespace KlayGE
 
 #ifdef KLAYGE_PLATFORM_WINDOWS_DESKTOP
 	HRESULT D3D12RenderEngine::D3DCompile(LPCVOID pSrcData, SIZE_T SrcDataSize, LPCSTR pSourceName,
-					D3D_SHADER_MACRO const * pDefines, ID3DInclude* pInclude, LPCSTR pEntrypoint,
-					LPCSTR pTarget, UINT Flags1, UINT Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs) const
+			D3D_SHADER_MACRO const * pDefines, ID3DInclude* pInclude, LPCSTR pEntrypoint,
+			LPCSTR pTarget, UINT Flags1, UINT Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs) const
 	{
 		return DynamicD3DCompile_(pSrcData, SrcDataSize, pSourceName, pDefines, pInclude, pEntrypoint,
 					pTarget, Flags1, Flags2, ppCode, ppErrorMsgs);
 	}
 	
-	HRESULT D3D12RenderEngine::D3DReflect(LPCVOID pSrcData, SIZE_T SrcDataSize, REFIID pInterface, void** ppReflector) const
+	HRESULT D3D12RenderEngine::D3DReflect(LPCVOID pSrcData, SIZE_T SrcDataSize, REFIID pInterface,
+			void** ppReflector) const
 	{
 		return DynamicD3DReflect_(pSrcData, SrcDataSize, pInterface, ppReflector);
 	}
 
-	HRESULT D3D12RenderEngine::D3DStripShader(LPCVOID pShaderBytecode, SIZE_T BytecodeLength, UINT uStripFlags, ID3DBlob** ppStrippedBlob) const
+	HRESULT D3D12RenderEngine::D3DStripShader(LPCVOID pShaderBytecode, SIZE_T BytecodeLength,
+			UINT uStripFlags, ID3DBlob** ppStrippedBlob) const
 	{
 		return DynamicD3DStripShader_(pShaderBytecode, BytecodeLength, uStripFlags, ppStrippedBlob);
 	}
