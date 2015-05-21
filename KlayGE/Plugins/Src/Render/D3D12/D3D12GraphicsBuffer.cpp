@@ -158,14 +158,67 @@ namespace KlayGE
 
 	void D3D12GraphicsBuffer::CreateBuffer(D3D11_SUBRESOURCE_DATA const * subres_init)
 	{
-		D3D11_BUFFER_DESC desc;
+		D3D12RenderEngine const & re = *checked_cast<D3D12RenderEngine const *>(&Context::Instance().RenderFactoryInstance().RenderEngineInstance());
+		ID3D11DevicePtr d3d_11_device = re.D3D11Device();
+		ID3D12DevicePtr d3d_12_device = re.D3D12Device();
+
+		D3D12_HEAP_PROPERTIES heap_prop;
+		heap_prop.Type = D3D12_HEAP_TYPE_UPLOAD;
+		heap_prop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		heap_prop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		heap_prop.CreationNodeMask = 1;
+		heap_prop.VisibleNodeMask = 1;
+
+		D3D12_RESOURCE_DESC res_desc;
+		res_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		res_desc.Alignment = 0;
+		res_desc.Width = size_in_byte_;
+		res_desc.Height = 1;
+		res_desc.DepthOrArraySize = 1;
+		res_desc.MipLevels = 1;
+		res_desc.Format = DXGI_FORMAT_UNKNOWN;
+		res_desc.SampleDesc.Count = 1;
+		res_desc.SampleDesc.Quality = 0;
+		res_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		res_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		ID3D12Resource* buffer_12;
+		TIF(d3d_12_device->CreateCommittedResource(&heap_prop, D3D12_HEAP_FLAG_NONE,
+			&res_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+			IID_ID3D12Resource, reinterpret_cast<void**>(&buffer_12)));
+		buffer_12_ = MakeCOMPtr(buffer_12);
+
+		if (subres_init != nullptr)
+		{
+			void* p;
+			buffer_12_->Map(0, nullptr, &p);
+			memcpy(p, subres_init->pSysMem, size_in_byte_);
+			buffer_12_->Unmap(0, nullptr);
+		}
+
+		ID3D11On12Device* d3d_11on12_dev;
+		TIF(d3d_11_device->QueryInterface(IID_ID3D11On12Device, reinterpret_cast<void**>(&d3d_11on12_dev)));
+		ID3D11On12DevicePtr d3d_11on12_device = MakeCOMPtr(d3d_11on12_dev);
+
+		D3D11_RESOURCE_FLAGS flags11;
+		D3D11_USAGE usage;
+		this->GetD3DFlags(usage, flags11.CPUAccessFlags, flags11.BindFlags, flags11.MiscFlags);
+		flags11.CPUAccessFlags = 0;
+		flags11.StructureByteStride = NumFormatBytes(fmt_as_shader_res_);
+		D3D12_RESOURCE_STATES res_state = (D3D11_BIND_INDEX_BUFFER == bind_flags_) ? D3D12_RESOURCE_STATE_INDEX_BUFFER : D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		ID3D11Buffer* buffer_11;
+		TIF(d3d_11on12_device->CreateWrappedResource(buffer_12_.get(), &flags11, res_state, res_state,
+			IID_ID3D11Buffer, reinterpret_cast<void**>(&buffer_11)));
+		buffer_ = MakeCOMPtr(buffer_11);
+
+		/*D3D11_BUFFER_DESC desc;
 		this->GetD3DFlags(desc.Usage, desc.CPUAccessFlags, desc.BindFlags, desc.MiscFlags);
 		desc.ByteWidth = size_in_byte_;
 		desc.StructureByteStride = NumFormatBytes(fmt_as_shader_res_);
 
 		ID3D11Buffer* buffer;
 		TIF(d3d_device_->CreateBuffer(&desc, subres_init, &buffer));
-		buffer_ = MakeCOMPtr(buffer);
+		buffer_ = MakeCOMPtr(buffer);*/
 
 		if ((access_hint_ & EAH_GPU_Read) && (fmt_as_shader_res_ != EF_Unknown))
 		{
@@ -173,7 +226,7 @@ namespace KlayGE
 			sr_desc.Format = (access_hint_ & EAH_GPU_Structured) ? DXGI_FORMAT_UNKNOWN : D3D12Mapping::MappingFormat(fmt_as_shader_res_);
 			sr_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
 			sr_desc.Buffer.ElementOffset = 0;
-			sr_desc.Buffer.ElementWidth = size_in_byte_ / desc.StructureByteStride;
+			sr_desc.Buffer.ElementWidth = size_in_byte_ / flags11.StructureByteStride;
 
 			ID3D11ShaderResourceView* d3d_sr_view;
 			TIF(d3d_device_->CreateShaderResourceView(buffer_.get(), &sr_desc, &d3d_sr_view));
@@ -197,7 +250,7 @@ namespace KlayGE
 			}
 			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 			uav_desc.Buffer.FirstElement = 0;
-			uav_desc.Buffer.NumElements = size_in_byte_ / desc.StructureByteStride;
+			uav_desc.Buffer.NumElements = size_in_byte_ / flags11.StructureByteStride;
 			uav_desc.Buffer.Flags = 0;
 			if (access_hint_ & EAH_Raw)
 			{
@@ -254,16 +307,19 @@ namespace KlayGE
 			break;
 		}
 
-		D3D11_MAPPED_SUBRESOURCE mapped;
-		TIF(d3d_imm_ctx_->Map(buffer_.get(), 0, type, 0, &mapped));
-		return mapped.pData;
+		//D3D11_MAPPED_SUBRESOURCE mapped;
+		//TIF(d3d_imm_ctx_->Map(buffer_.get(), 0, type, 0, &mapped));
+		void* p;
+		TIF(buffer_12_->Map(0, nullptr, &p));
+		return p;
 	}
 
 	void D3D12GraphicsBuffer::Unmap()
 	{
 		BOOST_ASSERT(buffer_);
 
-		d3d_imm_ctx_->Unmap(buffer_.get(), 0);
+		//d3d_imm_ctx_->Unmap(buffer_.get(), 0);
+		buffer_12_->Unmap(0, nullptr);
 	}
 
 	void D3D12GraphicsBuffer::CopyToBuffer(GraphicsBuffer& rhs)

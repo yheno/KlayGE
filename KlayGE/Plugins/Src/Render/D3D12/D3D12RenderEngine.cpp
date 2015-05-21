@@ -1197,7 +1197,7 @@ namespace KlayGE
 		}
 		caps_.independent_blend_support = (d3d_feature_level_ >= D3D_FEATURE_LEVEL_10_0);
 		caps_.draw_indirect_support = (d3d_feature_level_ >= D3D_FEATURE_LEVEL_11_0);
-		caps_.no_overwrite_support = true;
+		caps_.no_overwrite_support = false; // TODO
 		caps_.gs_support = (d3d_feature_level_ >= D3D_FEATURE_LEVEL_10_0);
 		caps_.hs_support = (d3d_feature_level_ >= D3D_FEATURE_LEVEL_11_0);
 		caps_.ds_support = (d3d_feature_level_ >= D3D_FEATURE_LEVEL_11_0);

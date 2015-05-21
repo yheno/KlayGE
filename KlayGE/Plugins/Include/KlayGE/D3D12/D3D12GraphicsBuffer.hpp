@@ -77,6 +77,7 @@ namespace KlayGE
 		ID3D11BufferPtr buffer_;
 		ID3D11ShaderResourceViewPtr d3d_sr_view_;
 		ID3D11UnorderedAccessViewPtr d3d_ua_view_;
+		ID3D12ResourcePtr buffer_12_;
 
 		uint32_t bind_flags_;
 		ElementFormat fmt_as_shader_res_;
