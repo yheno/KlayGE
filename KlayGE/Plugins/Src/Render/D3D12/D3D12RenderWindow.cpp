@@ -229,32 +229,32 @@ namespace KlayGE
 					{
 						d3d_12_device = MakeCOMPtr(device);
 
+						D3D12_COMMAND_QUEUE_DESC queue_desc;
+						queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+						queue_desc.Priority = 0;
+						queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+						queue_desc.NodeMask = 0;
+
+						ID3D12CommandQueue* cmd_queue;
+						TIF(d3d_12_device->CreateCommandQueue(&queue_desc,
+							IID_ID3D12CommandQueue, reinterpret_cast<void**>(&cmd_queue)));
+						d3d_12_cmd_queue = MakeCOMPtr(cmd_queue);
+
+						ID3D11Device* device_11 = nullptr;
+						ID3D11DeviceContext* imm_ctx_11 = nullptr;
+						D3D_FEATURE_LEVEL out_feature_level;
+						TIF(d3d12_re.D3D11On12CreateDevice(d3d_12_device.get(), create_device_flags,
+							&feature_levels_for_11[0], static_cast<uint32_t>(feature_levels_for_11.size()),
+							reinterpret_cast<IUnknown**>(&cmd_queue), 1, 0,
+							&device_11, &imm_ctx_11, &out_feature_level));
+						d3d_11_device = MakeCOMPtr(device_11);
+						d3d_11_imm_ctx = MakeCOMPtr(imm_ctx_11);
+
+						d3d12_re.D3DDevice(d3d_12_device, d3d_12_cmd_queue,
+							d3d_11_device, d3d_11_imm_ctx, out_feature_level);
+
 						if (Context::Instance().AppInstance().ConfirmDevice())
 						{
-							D3D12_COMMAND_QUEUE_DESC queue_desc;
-							queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-							queue_desc.Priority = 0;
-							queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-							queue_desc.NodeMask = 0;
-							
-							ID3D12CommandQueue* cmd_queue;
-							TIF(d3d_12_device->CreateCommandQueue(&queue_desc,
-								IID_ID3D12CommandQueue, reinterpret_cast<void**>(&cmd_queue)));
-							d3d_12_cmd_queue = MakeCOMPtr(cmd_queue);
-
-							ID3D11Device* device_11 = nullptr;
-							ID3D11DeviceContext* imm_ctx_11 = nullptr;
-							D3D_FEATURE_LEVEL out_feature_level;
-							TIF(d3d12_re.D3D11On12CreateDevice(d3d_12_device.get(), create_device_flags,
-								&feature_levels_for_11[0], static_cast<uint32_t>(feature_levels_for_11.size()),
-								reinterpret_cast<IUnknown**>(&cmd_queue), 1, 0,
-								&device_11, &imm_ctx_11, &out_feature_level));
-							d3d_11_device = MakeCOMPtr(device_11);
-							d3d_11_imm_ctx = MakeCOMPtr(imm_ctx_11);
-
-							d3d12_re.D3DDevice(d3d_12_device, d3d_12_cmd_queue,
-								d3d_11_device, d3d_11_imm_ctx, out_feature_level);
-
 							description_ = adapter_->Description() + L" " + adapters[j].second;
 							wchar_t const * fl_str;
 							switch (out_feature_level)
