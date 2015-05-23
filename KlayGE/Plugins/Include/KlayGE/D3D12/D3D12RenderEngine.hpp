@@ -74,6 +74,7 @@ namespace KlayGE
 		IDXGIFactory4Ptr const & DXGIFactory() const;
 		ID3D12DevicePtr const & D3D12Device() const;
 		ID3D12CommandQueuePtr const & D3D12CmdQueue() const;
+		ID3D12CommandAllocatorPtr const & D3D12CmdAllocator() const;
 		ID3D11DevicePtr const & D3D11Device() const;
 		ID3D11DeviceContextPtr const & D3D11DeviceImmContext() const;
 		D3D_FEATURE_LEVEL DeviceFeatureLevel() const;
@@ -225,6 +226,7 @@ namespace KlayGE
 		IDXGIFactory4Ptr	gi_factory_;
 		ID3D12DevicePtr		d3d_12_device_;
 		ID3D12CommandQueuePtr d3d_12_cmd_queue_;
+		ID3D12CommandAllocatorPtr d3d_12_cmd_allocator_;
 		ID3D11DevicePtr		d3d_11_device_;
 		ID3D11DeviceContextPtr d3d_11_imm_ctx_;
 		D3D_FEATURE_LEVEL d3d_feature_level_;

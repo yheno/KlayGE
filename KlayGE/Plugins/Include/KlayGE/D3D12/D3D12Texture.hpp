@@ -212,6 +212,8 @@ namespace KlayGE
 	private:
 		D3D11_TEXTURE2D_DESC desc_;
 		ID3D11Texture2DPtr d3dTexture2D_;
+		ID3D12ResourcePtr d3d_12_texture_;
+		ID3D12ResourcePtr d3d_12_texture_upload_heaps_;
 
 		std::vector<uint32_t>	widths_;
 		std::vector<uint32_t>	heights_;

@@ -262,6 +262,11 @@ namespace KlayGE
 		return d3d_12_cmd_queue_;
 	}
 
+	ID3D12CommandAllocatorPtr const & D3D12RenderEngine::D3D12CmdAllocator() const
+	{
+		return d3d_12_cmd_allocator_;
+	}
+
 	// 获取D3D Device接口
 	/////////////////////////////////////////////////////////////////////////////////
 	ID3D11DevicePtr const & D3D12RenderEngine::D3D11Device() const
@@ -304,6 +309,11 @@ namespace KlayGE
 
 		D3D12RenderWindowPtr win = MakeSharedPtr<D3D12RenderWindow>(gi_factory_, this->ActiveAdapter(),
 			name, settings);
+
+		ID3D12CommandAllocator* d3d_12_cmd_allocator;
+		TIF(d3d_12_device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+			IID_ID3D12CommandAllocator, reinterpret_cast<void**>(&d3d_12_cmd_allocator)));
+		d3d_12_cmd_allocator_ = MakeCOMPtr(d3d_12_cmd_allocator);
 
 		switch (d3d_feature_level_)
 		{

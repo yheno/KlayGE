@@ -480,9 +480,207 @@ namespace KlayGE
 			}
 		}
 
+		D3D12RenderEngine const & re = *checked_cast<D3D12RenderEngine const *>(&Context::Instance().RenderFactoryInstance().RenderEngineInstance());
+		ID3D11DevicePtr d3d_11_device = re.D3D11Device();
+		ID3D12DevicePtr d3d_12_device = re.D3D12Device();
+		ID3D12CommandAllocatorPtr d3d_12_cmd_allocator = re.D3D12CmdAllocator();
+
+		D3D12_RESOURCE_DESC tex_desc = {};
+		tex_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		tex_desc.Alignment = 0;
+		tex_desc.Width = desc_.Width;
+		tex_desc.Height = desc_.Height;
+		tex_desc.DepthOrArraySize = static_cast<UINT16>(desc_.ArraySize);
+		tex_desc.MipLevels = static_cast<UINT16>(desc_.MipLevels);
+		tex_desc.Format = desc_.Format;
+		tex_desc.SampleDesc.Count = 1;
+		tex_desc.SampleDesc.Quality = 0;
+		tex_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		tex_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		if (access_hint_ & EAH_GPU_Write)
+		{
+			if (IsDepthFormat(format_))
+			{
+				tex_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+			}
+			else
+			{
+				tex_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+			}
+		}
+		if (access_hint_ & EAH_GPU_Unordered)
+		{
+			tex_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		}
+
+		D3D12_HEAP_PROPERTIES heap_prop;
+		heap_prop.Type = D3D12_HEAP_TYPE_DEFAULT;
+		heap_prop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		heap_prop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		heap_prop.CreationNodeMask = 1;
+		heap_prop.VisibleNodeMask = 1;
+
+		ID3D12Resource* d3d_12_texture;
+		TIF(d3d_12_device->CreateCommittedResource(&heap_prop, D3D12_HEAP_FLAG_NONE,
+			&tex_desc, D3D12_RESOURCE_STATE_COMMON, nullptr,
+			IID_ID3D12Resource, reinterpret_cast<void**>(&d3d_12_texture)));
+		d3d_12_texture_ = MakeCOMPtr(d3d_12_texture);
+
+		uint32_t const num_subres = array_size_ * num_mip_maps_;
+		uint64_t upload_buffer_size = 0;
+		d3d_12_device->GetCopyableFootprints(&tex_desc, 0, num_subres, 0, nullptr, nullptr, nullptr, &upload_buffer_size);
+
+		D3D12_HEAP_PROPERTIES upload_heap_prop;
+		upload_heap_prop.Type = D3D12_HEAP_TYPE_UPLOAD;
+		upload_heap_prop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		upload_heap_prop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		upload_heap_prop.CreationNodeMask = 1;
+		upload_heap_prop.VisibleNodeMask = 1;
+
+		D3D12_RESOURCE_DESC buff_desc;
+		buff_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		buff_desc.Alignment = 0;
+		buff_desc.Width = upload_buffer_size;
+		buff_desc.Height = 1;
+		buff_desc.DepthOrArraySize = 1;
+		buff_desc.MipLevels = 1;
+		buff_desc.Format = DXGI_FORMAT_UNKNOWN;
+		buff_desc.SampleDesc.Count = 1;
+		buff_desc.SampleDesc.Quality = 0;
+		buff_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		buff_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		ID3D12Resource* d3d_12_texture_upload_heaps;
+		TIF(d3d_12_device->CreateCommittedResource(&upload_heap_prop, D3D12_HEAP_FLAG_NONE, &buff_desc,
+			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+			IID_ID3D12Resource, reinterpret_cast<void**>(&d3d_12_texture_upload_heaps)));
+		d3d_12_texture_upload_heaps_ = MakeCOMPtr(d3d_12_texture_upload_heaps);
+
+		if (init_data != nullptr)
+		{
+			ID3D12CommandQueuePtr d3d_12_cmd_queue = re.D3D12CmdQueue();
+
+			ID3D12GraphicsCommandList* cmd_list;
+			TIF(d3d_12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, d3d_12_cmd_allocator.get(), nullptr,
+				IID_ID3D12GraphicsCommandList, reinterpret_cast<void**>(&cmd_list)));
+			ID3D12GraphicsCommandListPtr d3d_12_cmd_list = MakeCOMPtr(cmd_list);
+
+			D3D12_RESOURCE_BARRIER barrier_before;
+			barrier_before.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_before.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_before.Transition.pResource = d3d_12_texture_.get();
+			barrier_before.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+			barrier_before.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+			barrier_before.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+			d3d_12_cmd_list->ResourceBarrier(1, &barrier_before);
+
+			std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts(num_subres);
+			std::vector<uint64_t> row_sizes_in_bytes(num_subres);
+			std::vector<uint32_t> num_rows(num_subres);
+
+			uint64_t required_size = 0;
+			d3d_12_device->GetCopyableFootprints(&tex_desc, 0, num_subres, 0, &layouts[0], &num_rows[0], &row_sizes_in_bytes[0], &required_size);
+
+			uint8_t* p;
+			d3d_12_texture_upload_heaps_->Map(0, nullptr, reinterpret_cast<void**>(&p));
+			for (uint32_t i = 0; i < num_subres; ++ i)
+			{
+				D3D12_SUBRESOURCE_DATA src_data;
+				src_data.pData = subres_data[i].pSysMem;
+				src_data.RowPitch = subres_data[i].SysMemPitch;
+				src_data.SlicePitch = subres_data[i].SysMemSlicePitch;
+
+				D3D12_MEMCPY_DEST dest_data;
+				dest_data.pData = p + layouts[i].Offset;
+				dest_data.RowPitch = layouts[i].Footprint.RowPitch;
+				dest_data.SlicePitch = layouts[i].Footprint.RowPitch * num_rows[i];
+
+				for (UINT z = 0; z < layouts[i].Footprint.Depth; ++ z)
+				{
+					uint8_t const * src_slice
+						= reinterpret_cast<uint8_t const *>(src_data.pData) + src_data.SlicePitch * z;
+					uint8_t* dest_slice = reinterpret_cast<uint8_t*>(dest_data.pData) + dest_data.SlicePitch * z;
+					for (UINT y = 0; y < num_rows[i]; ++ y)
+					{
+						memcpy(dest_slice + dest_data.RowPitch * y, src_slice + src_data.RowPitch * y,
+							row_sizes_in_bytes[i]);
+					}
+				}
+			}
+			d3d_12_texture_upload_heaps_->Unmap(0, nullptr);
+
+			for (uint32_t i = 0; i < num_subres; ++ i)
+			{
+				D3D12_TEXTURE_COPY_LOCATION src;
+				src.pResource = d3d_12_texture_upload_heaps_.get();
+				src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+				src.PlacedFootprint = layouts[i];
+
+				D3D12_TEXTURE_COPY_LOCATION dst;
+				dst.pResource = d3d_12_texture_.get();
+				dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+				dst.SubresourceIndex = i;
+
+				cmd_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+			}
+
+			D3D12_RESOURCE_BARRIER barrier_after;
+			barrier_after.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_after.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_after.Transition.pResource = d3d_12_texture_.get();
+			barrier_after.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+			barrier_after.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE; // TODO
+			barrier_after.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+			d3d_12_cmd_list->ResourceBarrier(1, &barrier_after);
+
+			TIF(d3d_12_cmd_list->Close());
+			ID3D12CommandList* cmd_lists[] = { d3d_12_cmd_list.get() };
+			d3d_12_cmd_queue->ExecuteCommandLists(sizeof(cmd_lists) / sizeof(cmd_lists[0]), cmd_lists);
+		}
+
+		ID3D11On12Device* d3d_11on12_dev;
+		TIF(d3d_11_device->QueryInterface(IID_ID3D11On12Device, reinterpret_cast<void**>(&d3d_11on12_dev)));
+		ID3D11On12DevicePtr d3d_11on12_device = MakeCOMPtr(d3d_11on12_dev);
+
+		D3D11_RESOURCE_FLAGS flags11;
+		D3D11_USAGE usage;
+		this->GetD3DFlags(usage, flags11.BindFlags, flags11.CPUAccessFlags, flags11.MiscFlags);
+		flags11.CPUAccessFlags = 0;
+		flags11.StructureByteStride = 0;
+		D3D12_RESOURCE_STATES res_state = D3D12_RESOURCE_STATE_COMMON;
+		if ((access_hint_ & EAH_GPU_Read) || (D3D11_USAGE_DYNAMIC == usage))
+		{
+			res_state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			if (IsDepthFormat(format_))
+			{
+				res_state |= D3D12_RESOURCE_STATE_DEPTH_READ;
+			}
+		}
+		if (access_hint_ & EAH_GPU_Write)
+		{
+			if (IsDepthFormat(format_))
+			{
+				res_state |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
+			}
+			else
+			{
+				res_state |= D3D12_RESOURCE_STATE_RENDER_TARGET;
+			}
+		}
+		if (access_hint_ & EAH_GPU_Unordered)
+		{
+			res_state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		}
 		ID3D11Texture2D* d3d_tex;
-		TIF(d3d_device_->CreateTexture2D(&desc_, (init_data != nullptr) ? &subres_data[0] : nullptr, &d3d_tex));
+		TIF(d3d_11on12_device->CreateWrappedResource(d3d_12_texture_.get(), &flags11, res_state, res_state,
+			IID_ID3D11Texture2D, reinterpret_cast<void**>(&d3d_tex)));
 		d3dTexture2D_ = MakeCOMPtr(d3d_tex);
+
+		/*ID3D11Texture2D* d3d_tex;
+		TIF(d3d_device_->CreateTexture2D(&desc_, (init_data != nullptr) ? &subres_data[0] : nullptr, &d3d_tex));
+		d3dTexture2D_ = MakeCOMPtr(d3d_tex);*/
 
 		if ((access_hint_ & (EAH_GPU_Read | EAH_Generate_Mips)) && (num_mip_maps_ > 1))
 		{
