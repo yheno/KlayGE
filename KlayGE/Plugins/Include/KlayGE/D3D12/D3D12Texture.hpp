@@ -115,6 +115,8 @@ namespace KlayGE
 		unordered_map<size_t, ID3D11UnorderedAccessViewPtr> d3d_ua_views_;
 		unordered_map<size_t, ID3D11RenderTargetViewPtr> d3d_rt_views_;
 		unordered_map<size_t, ID3D11DepthStencilViewPtr> d3d_ds_views_;
+
+		TextureMapAccess last_tma_;
 	};
 
 	typedef shared_ptr<D3D12Texture> D3D12TexturePtr;

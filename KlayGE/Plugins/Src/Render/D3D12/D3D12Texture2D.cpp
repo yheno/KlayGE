@@ -197,11 +197,11 @@ namespace KlayGE
 	{
 		BOOST_ASSERT(type_ == target.Type());
 
-		D3D12Texture& other(*checked_cast<D3D12Texture*>(&target));
+		D3D12Texture2D& other(*checked_cast<D3D12Texture2D*>(&target));
 
 		if ((src_width == dst_width) && (src_height == dst_height) && (this->Format() == target.Format()))
 		{
-			D3D11_BOX src_box;
+			/*D3D11_BOX src_box;
 			src_box.left = src_x_offset;
 			src_box.top = src_y_offset;
 			src_box.front = 0;
@@ -210,7 +210,77 @@ namespace KlayGE
 			src_box.back = 1;
 
 			d3d_imm_ctx_->CopySubresourceRegion(other.D3DResource().get(), D3D11CalcSubresource(dst_level, dst_array_index, target.NumMipMaps()),
-				dst_x_offset, dst_y_offset, 0, this->D3DResource().get(), D3D11CalcSubresource(src_level, src_array_index, this->NumMipMaps()), &src_box);
+				dst_x_offset, dst_y_offset, 0, this->D3DResource().get(), D3D11CalcSubresource(src_level, src_array_index, this->NumMipMaps()), &src_box);*/
+
+			uint32_t src_subres = D3D11CalcSubresource(src_level, src_array_index, this->NumMipMaps());
+			uint32_t dst_subres = D3D11CalcSubresource(dst_level, dst_array_index, target.NumMipMaps());
+
+			D3D12RenderEngine const & re = *checked_cast<D3D12RenderEngine const *>(&Context::Instance().RenderFactoryInstance().RenderEngineInstance());
+			ID3D12DevicePtr d3d_12_device = re.D3D12Device();
+			ID3D12CommandAllocatorPtr d3d_12_cmd_allocator = re.D3D12CmdAllocator();
+
+			ID3D12CommandQueuePtr d3d_12_cmd_queue = re.D3D12CmdQueue();
+
+			ID3D12GraphicsCommandList* cmd_list;
+			TIF(d3d_12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, d3d_12_cmd_allocator.get(), nullptr,
+				IID_ID3D12GraphicsCommandList, reinterpret_cast<void**>(&cmd_list)));
+			ID3D12GraphicsCommandListPtr d3d_12_cmd_list = MakeCOMPtr(cmd_list);
+
+			D3D12_RESOURCE_BARRIER barrier_before[2];
+			barrier_before[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_before[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_before[0].Transition.pResource = d3d_12_texture_.get();
+			barrier_before[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+			barrier_before[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+			barrier_before[0].Transition.Subresource = src_subres;
+			barrier_before[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_before[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_before[1].Transition.pResource = other.d3d_12_texture_.get();
+			barrier_before[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+			barrier_before[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+			barrier_before[1].Transition.Subresource = dst_subres;
+
+			d3d_12_cmd_list->ResourceBarrier(2, barrier_before);
+
+			D3D12_TEXTURE_COPY_LOCATION src;
+			src.pResource = d3d_12_texture_.get();
+			src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+			src.SubresourceIndex = src_subres;
+
+			D3D12_TEXTURE_COPY_LOCATION dst;
+			dst.pResource = other.d3d_12_texture_.get();
+			dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+			dst.SubresourceIndex = dst_subres;
+
+			D3D12_BOX src_box;
+			src_box.left = src_x_offset;
+			src_box.top = src_y_offset;
+			src_box.front = 0;
+			src_box.right = src_x_offset + src_width;
+			src_box.bottom = src_y_offset + src_height;
+			src_box.back = 1;
+
+			cmd_list->CopyTextureRegion(&dst, dst_x_offset, dst_y_offset, 0, &src, &src_box);
+
+			D3D12_RESOURCE_BARRIER barrier_after[2];
+			barrier_after[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_after[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_after[0].Transition.pResource = d3d_12_texture_.get();
+			barrier_after[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+			barrier_after[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON; // TODO
+			barrier_after[0].Transition.Subresource = src_subres;
+			barrier_after[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_after[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_after[1].Transition.pResource = other.d3d_12_texture_.get();
+			barrier_after[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+			barrier_after[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON; // TODO
+			barrier_after[1].Transition.Subresource = dst_subres;
+
+			d3d_12_cmd_list->ResourceBarrier(2, barrier_after);
+
+			TIF(d3d_12_cmd_list->Close());
+			ID3D12CommandList* cmd_lists[] = { d3d_12_cmd_list.get() };
+			d3d_12_cmd_queue->ExecuteCommandLists(sizeof(cmd_lists) / sizeof(cmd_lists[0]), cmd_lists);
 		}
 		else
 		{
@@ -423,16 +493,148 @@ namespace KlayGE
 			uint32_t x_offset, uint32_t y_offset, uint32_t /*width*/, uint32_t /*height*/,
 			void*& data, uint32_t& row_pitch)
 	{
-		D3D11_MAPPED_SUBRESOURCE mapped;
+		last_tma_ = tma;
+
+		uint32_t subres = D3D11CalcSubresource(level, array_index, num_mip_maps_);
+
+		D3D12RenderEngine const & re = *checked_cast<D3D12RenderEngine const *>(&Context::Instance().RenderFactoryInstance().RenderEngineInstance());
+		ID3D11DevicePtr d3d_11_device = re.D3D11Device();
+		ID3D12DevicePtr d3d_12_device = re.D3D12Device();
+		ID3D12CommandAllocatorPtr d3d_12_cmd_allocator = re.D3D12CmdAllocator();
+
+		ID3D12CommandQueuePtr d3d_12_cmd_queue = re.D3D12CmdQueue();
+
+		ID3D12GraphicsCommandList* cmd_list;
+		TIF(d3d_12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, d3d_12_cmd_allocator.get(), nullptr,
+			IID_ID3D12GraphicsCommandList, reinterpret_cast<void**>(&cmd_list)));
+		ID3D12GraphicsCommandListPtr d3d_12_cmd_list = MakeCOMPtr(cmd_list);
+
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
+		uint64_t row_sizes_in_bytes;
+		uint32_t num_rows;
+
+		D3D12_RESOURCE_DESC tex_desc = d3d_12_texture_->GetDesc();
+		uint64_t required_size = 0;
+		d3d_12_device->GetCopyableFootprints(&tex_desc, subres, 1, 0, &layout, &num_rows, &row_sizes_in_bytes, &required_size);
+
+		if ((TMA_Read_Only == tma) || (TMA_Read_Write == tma))
+		{
+			D3D12_RESOURCE_BARRIER barrier_before;
+			barrier_before.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_before.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_before.Transition.pResource = d3d_12_texture_.get();
+			barrier_before.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON; // TODO
+			barrier_before.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+			barrier_before.Transition.Subresource = subres;
+
+			d3d_12_cmd_list->ResourceBarrier(1, &barrier_before);
+
+			D3D12_TEXTURE_COPY_LOCATION src;
+			src.pResource = d3d_12_texture_.get();
+			src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+			src.SubresourceIndex = subres;
+
+			D3D12_TEXTURE_COPY_LOCATION dst;
+			dst.pResource = d3d_12_texture_upload_heaps_.get();
+			dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+			dst.PlacedFootprint = layout;
+
+			cmd_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+
+			D3D12_RESOURCE_BARRIER barrier_after;
+			barrier_after.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_after.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_after.Transition.pResource = d3d_12_texture_.get();
+			barrier_after.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+			barrier_after.Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON; // TODO
+			barrier_after.Transition.Subresource = subres;
+
+			d3d_12_cmd_list->ResourceBarrier(1, &barrier_after);
+		}
+
+		uint8_t* p;
+		d3d_12_texture_upload_heaps_->Map(0, nullptr, reinterpret_cast<void**>(&p));
+
+		data = p + layout.Offset + y_offset * layout.Footprint.RowPitch + x_offset * NumFormatBytes(format_);
+		row_pitch = layout.Footprint.RowPitch;
+
+		TIF(d3d_12_cmd_list->Close());
+		ID3D12CommandList* cmd_lists[] = { d3d_12_cmd_list.get() };
+		d3d_12_cmd_queue->ExecuteCommandLists(sizeof(cmd_lists) / sizeof(cmd_lists[0]), cmd_lists);
+
+		/*D3D11_MAPPED_SUBRESOURCE mapped;
 		TIF(d3d_imm_ctx_->Map(d3dTexture2D_.get(), D3D11CalcSubresource(level, array_index, num_mip_maps_), D3D12Mapping::Mapping(tma, type_, access_hint_, num_mip_maps_), 0, &mapped));
 		uint8_t* p = static_cast<uint8_t*>(mapped.pData);
 		data = p + y_offset * mapped.RowPitch + x_offset * NumFormatBytes(format_);
-		row_pitch = mapped.RowPitch;
+		row_pitch = mapped.RowPitch;*/
 	}
 
 	void D3D12Texture2D::Unmap2D(uint32_t array_index, uint32_t level)
 	{
-		d3d_imm_ctx_->Unmap(d3dTexture2D_.get(), D3D11CalcSubresource(level, array_index, num_mip_maps_));
+		//d3d_imm_ctx_->Unmap(d3dTexture2D_.get(), D3D11CalcSubresource(level, array_index, num_mip_maps_));
+
+		D3D12RenderEngine const & re = *checked_cast<D3D12RenderEngine const *>(&Context::Instance().RenderFactoryInstance().RenderEngineInstance());
+		ID3D11DevicePtr d3d_11_device = re.D3D11Device();
+		ID3D12DevicePtr d3d_12_device = re.D3D12Device();
+		ID3D12CommandAllocatorPtr d3d_12_cmd_allocator = re.D3D12CmdAllocator();
+
+		ID3D12CommandQueuePtr d3d_12_cmd_queue = re.D3D12CmdQueue();
+
+		ID3D12GraphicsCommandList* cmd_list;
+		TIF(d3d_12_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, d3d_12_cmd_allocator.get(), nullptr,
+			IID_ID3D12GraphicsCommandList, reinterpret_cast<void**>(&cmd_list)));
+		ID3D12GraphicsCommandListPtr d3d_12_cmd_list = MakeCOMPtr(cmd_list);
+
+		d3d_12_texture_upload_heaps_->Unmap(0, nullptr);
+
+		uint32_t subres = D3D11CalcSubresource(level, array_index, num_mip_maps_);
+
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
+		uint64_t row_sizes_in_bytes;
+		uint32_t num_rows;
+
+		D3D12_RESOURCE_DESC tex_desc = d3d_12_texture_->GetDesc();
+		uint64_t required_size = 0;
+		d3d_12_device->GetCopyableFootprints(&tex_desc, subres, 1, 0, &layout, &num_rows, &row_sizes_in_bytes, &required_size);
+
+		if ((TMA_Write_Only == last_tma_) || (TMA_Read_Write == last_tma_))
+		{
+			D3D12_RESOURCE_BARRIER barrier_before;
+			barrier_before.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_before.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_before.Transition.pResource = d3d_12_texture_.get();
+			barrier_before.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON; // TODO
+			barrier_before.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+			barrier_before.Transition.Subresource = subres;
+
+			d3d_12_cmd_list->ResourceBarrier(1, &barrier_before);
+
+			D3D12_TEXTURE_COPY_LOCATION src;
+			src.pResource = d3d_12_texture_upload_heaps_.get();
+			src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+			src.PlacedFootprint = layout;
+
+			D3D12_TEXTURE_COPY_LOCATION dst;
+			dst.pResource = d3d_12_texture_.get();
+			dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+			dst.SubresourceIndex = subres;
+
+			cmd_list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+
+			D3D12_RESOURCE_BARRIER barrier_after;
+			barrier_after.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier_after.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier_after.Transition.pResource = d3d_12_texture_.get();
+			barrier_after.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+			barrier_after.Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON; // TODO
+			barrier_after.Transition.Subresource = subres;
+
+			d3d_12_cmd_list->ResourceBarrier(1, &barrier_after);
+		}
+
+		TIF(d3d_12_cmd_list->Close());
+		ID3D12CommandList* cmd_lists[] = { d3d_12_cmd_list.get() };
+		d3d_12_cmd_queue->ExecuteCommandLists(sizeof(cmd_lists) / sizeof(cmd_lists[0]), cmd_lists);
 	}
 
 	void D3D12Texture2D::BuildMipSubLevels()
@@ -630,7 +832,7 @@ namespace KlayGE
 			barrier_after.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 			barrier_after.Transition.pResource = d3d_12_texture_.get();
 			barrier_after.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-			barrier_after.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE; // TODO
+			barrier_after.Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON; // TODO
 			barrier_after.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
 			d3d_12_cmd_list->ResourceBarrier(1, &barrier_after);
@@ -652,7 +854,7 @@ namespace KlayGE
 		D3D12_RESOURCE_STATES res_state = D3D12_RESOURCE_STATE_COMMON;
 		if ((access_hint_ & EAH_GPU_Read) || (D3D11_USAGE_DYNAMIC == usage))
 		{
-			res_state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			res_state |= D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 			if (IsDepthFormat(format_))
 			{
 				res_state |= D3D12_RESOURCE_STATE_DEPTH_READ;
@@ -674,7 +876,7 @@ namespace KlayGE
 			res_state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		}
 		ID3D11Texture2D* d3d_tex;
-		TIF(d3d_11on12_device->CreateWrappedResource(d3d_12_texture_.get(), &flags11, res_state, res_state,
+		TIF(d3d_11on12_device->CreateWrappedResource(d3d_12_texture_.get(), &flags11, D3D12_RESOURCE_STATE_COMMON, res_state,
 			IID_ID3D11Texture2D, reinterpret_cast<void**>(&d3d_tex)));
 		d3dTexture2D_ = MakeCOMPtr(d3d_tex);
 
