@@ -156,6 +156,8 @@ namespace KlayGE
 #endif
 
 			std::vector<tuple<char const *, D3D_FEATURE_LEVEL, bool> > available_feature_levels;
+			available_feature_levels.push_back(KlayGE::make_tuple("12_1", D3D_FEATURE_LEVEL_12_1, true));
+			available_feature_levels.push_back(KlayGE::make_tuple("12_0", D3D_FEATURE_LEVEL_12_0, true));
 			available_feature_levels.push_back(KlayGE::make_tuple("11_1", D3D_FEATURE_LEVEL_11_1, true));
 			available_feature_levels.push_back(KlayGE::make_tuple("11_0", D3D_FEATURE_LEVEL_11_0, true));
 			available_feature_levels.push_back(KlayGE::make_tuple("10_1", D3D_FEATURE_LEVEL_10_1, false));
@@ -209,18 +211,18 @@ namespace KlayGE
 				feature_levels_for_11.push_back(get<1>(available_feature_levels[i]));
 			}
 
-			std::vector<std::pair<IDXGIAdapter1Ptr, wchar_t const *> > adapters;
-			adapters.push_back(std::make_pair(adapter_->DXGIAdapter(), L"HW"));
+			std::vector<IDXGIAdapter1Ptr> adapters;
+			adapters.push_back(adapter_->DXGIAdapter());
 
 			{
 				IDXGIAdapter1* warp_adapter;
 				TIF(gi_factory_->EnumWarpAdapter(IID_IDXGIAdapter1, reinterpret_cast<void**>(&warp_adapter)));
-				adapters.push_back(std::make_pair(MakeCOMPtr(warp_adapter), L"WARP"));
+				adapters.push_back(MakeCOMPtr(warp_adapter));
 			}
 
 			for (size_t j = 0; j < adapters.size(); ++ j)
 			{
-				IDXGIAdapter* dx_adapter = adapters[j].first.get();
+				IDXGIAdapter* dx_adapter = adapters[j].get();
 				for (size_t i = 0; i < feature_levels_for_12.size(); ++ i)
 				{
 					ID3D12Device* device = nullptr;
@@ -255,10 +257,38 @@ namespace KlayGE
 
 						if (Context::Instance().AppInstance().ConfirmDevice())
 						{
-							description_ = adapter_->Description() + L" " + adapters[j].second;
+							if (j != 0)
+							{
+								IDXGIDevice1* dxgi_device = nullptr;
+								HRESULT hr = d3d_11_device->QueryInterface(IID_IDXGIDevice1, reinterpret_cast<void**>(&dxgi_device));
+								if (SUCCEEDED(hr) && (dxgi_device != nullptr))
+								{
+									IDXGIAdapter* ada;
+									dxgi_device->GetAdapter(&ada);
+									IDXGIAdapter1* ada1;
+									ada->QueryInterface(IID_IDXGIAdapter1, reinterpret_cast<void**>(&ada1));
+									ada->Release();
+									adapter_->ResetAdapter(MakeCOMPtr(ada1));
+									adapter_->Enumerate();
+								}
+#ifdef KLAYGE_PLATFORM_WINDOWS_RUNTIME
+								dxgi_device->SetMaximumFrameLatency(1);
+#endif
+								dxgi_device->Release();
+							}
+
+							description_ = adapter_->Description() + L" FL ";
 							wchar_t const * fl_str;
 							switch (out_feature_level)
 							{
+							case D3D_FEATURE_LEVEL_12_1:
+								fl_str = L"12.1";
+								break;
+
+							case D3D_FEATURE_LEVEL_12_0:
+								fl_str = L"12.0";
+								break;
+
 							case D3D_FEATURE_LEVEL_11_1:
 								fl_str = L"11.1";
 								break;
@@ -291,7 +321,6 @@ namespace KlayGE
 								fl_str = L"Unknown";
 								break;
 							}
-							description_ += L" D3D Level ";
 							description_ += fl_str;
 							if (settings.sample_count > 1)
 							{
@@ -320,56 +349,46 @@ namespace KlayGE
 		Verify(!!d3d_11_device);
 		Verify(!!d3d_11_imm_ctx);
 
-		bool isDepthBuffered = IsDepthFormat(settings.depth_stencil_fmt);
-		uint32_t depthBits = NumDepthBits(settings.depth_stencil_fmt);
-		uint32_t stencilBits = NumStencilBits(settings.depth_stencil_fmt);
-		if (isDepthBuffered)
+		depth_stencil_format_ = DXGI_FORMAT_UNKNOWN;
+		ElementFormat depth_stencil_fmt = settings.depth_stencil_fmt;
+		if (IsDepthFormat(depth_stencil_fmt))
 		{
-			BOOST_ASSERT((32 == depthBits) || (24 == depthBits) || (16 == depthBits) || (0 == depthBits));
-			BOOST_ASSERT((8 == stencilBits) || (0 == stencilBits));
+			BOOST_ASSERT((EF_D32F == depth_stencil_fmt) || (EF_D24S8 == depth_stencil_fmt)
+				|| (EF_D16 == depth_stencil_fmt));
 
 			UINT format_support;
 
-			if (32 == depthBits)
+			if (EF_D32F == depth_stencil_fmt)
 			{
-				BOOST_ASSERT(0 == stencilBits);
-
 				// Try 32-bit zbuffer
 				d3d_11_device->CheckFormatSupport(DXGI_FORMAT_D32_FLOAT, &format_support);
 				if (format_support & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
 				{
 					depth_stencil_format_ = DXGI_FORMAT_D32_FLOAT;
-					stencilBits = 0;
 				}
 				else
 				{
-					depthBits = 24;
+					depth_stencil_fmt = EF_D24S8;
 				}
 			}
-			if (24 == depthBits)
+			if (EF_D24S8 == depth_stencil_fmt)
 			{
 				d3d_11_device->CheckFormatSupport(DXGI_FORMAT_D24_UNORM_S8_UINT, &format_support);
 				if (format_support & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
 				{
 					depth_stencil_format_ = DXGI_FORMAT_D24_UNORM_S8_UINT;
-					stencilBits = 8;
 				}
 				else
 				{
-					depthBits = 16;
+					depth_stencil_fmt = EF_D16;
 				}
 			}
-			if (16 == depthBits)
+			if (EF_D16 == depth_stencil_fmt)
 			{
 				d3d_11_device->CheckFormatSupport(DXGI_FORMAT_D16_UNORM, &format_support);
 				if (format_support & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
 				{
 					depth_stencil_format_ = DXGI_FORMAT_D16_UNORM;
-					stencilBits = 0;
-				}
-				else
-				{
-					depthBits = 0;
 				}
 			}
 		}
@@ -803,62 +822,65 @@ namespace KlayGE
 			}
 		}
 
-		// Create depth stencil texture
-		D3D11_TEXTURE2D_DESC ds_desc;
-		ds_desc.Width = this->Width();
-		ds_desc.Height = this->Height();
-		ds_desc.MipLevels = 1;
-		ds_desc.ArraySize = stereo ? 2 : 1;
-		ds_desc.Format = depth_stencil_format_;
-		ds_desc.SampleDesc.Count = bb_desc.SampleDesc.Count;
-		ds_desc.SampleDesc.Quality = bb_desc.SampleDesc.Quality;
-		ds_desc.Usage = D3D11_USAGE_DEFAULT;
-		ds_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-		ds_desc.CPUAccessFlags = 0;
-		ds_desc.MiscFlags = 0;
-		ID3D11Texture2D* depth_stencil;
-		TIF(d3d_11_device->CreateTexture2D(&ds_desc, nullptr, &depth_stencil));
-		depth_stencil_ = MakeCOMPtr(depth_stencil);
-
-		// Create the depth stencil view
-		D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc;
-		dsv_desc.Format = depth_stencil_format_;
-		dsv_desc.Flags = 0;
-		if (bb_desc.SampleDesc.Count > 1)
+		if (depth_stencil_format_ != DXGI_FORMAT_UNKNOWN)
 		{
-			dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
-			dsv_desc.Texture2DMSArray.FirstArraySlice = 0;
-			dsv_desc.Texture2DMSArray.ArraySize = 1;
-		}
-		else
-		{
-			dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-			dsv_desc.Texture2DArray.MipSlice = 0;
-			dsv_desc.Texture2DArray.FirstArraySlice = 0;
-			dsv_desc.Texture2DArray.ArraySize = 1;
-		}
+			// Create depth stencil texture
+			D3D11_TEXTURE2D_DESC ds_desc;
+			ds_desc.Width = this->Width();
+			ds_desc.Height = this->Height();
+			ds_desc.MipLevels = 1;
+			ds_desc.ArraySize = stereo ? 2 : 1;
+			ds_desc.Format = depth_stencil_format_;
+			ds_desc.SampleDesc.Count = bb_desc.SampleDesc.Count;
+			ds_desc.SampleDesc.Quality = bb_desc.SampleDesc.Quality;
+			ds_desc.Usage = D3D11_USAGE_DEFAULT;
+			ds_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+			ds_desc.CPUAccessFlags = 0;
+			ds_desc.MiscFlags = 0;
+			ID3D11Texture2D* depth_stencil;
+			TIF(d3d_11_device->CreateTexture2D(&ds_desc, nullptr, &depth_stencil));
+			depth_stencil_ = MakeCOMPtr(depth_stencil);
 
-		ID3D11DepthStencilView* depth_stencil_view;
-		TIF(d3d_11_device->CreateDepthStencilView(depth_stencil_.get(), &dsv_desc, &depth_stencil_view));
-		depth_stencil_view_ = MakeCOMPtr(depth_stencil_view);
-
-		if (stereo)
-		{
+			// Create the depth stencil view
+			D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc;
+			dsv_desc.Format = depth_stencil_format_;
+			dsv_desc.Flags = 0;
 			if (bb_desc.SampleDesc.Count > 1)
 			{
 				dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
-				dsv_desc.Texture2DMSArray.FirstArraySlice = 1;
+				dsv_desc.Texture2DMSArray.FirstArraySlice = 0;
 				dsv_desc.Texture2DMSArray.ArraySize = 1;
 			}
 			else
 			{
 				dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
 				dsv_desc.Texture2DArray.MipSlice = 0;
-				dsv_desc.Texture2DArray.FirstArraySlice = 1;
+				dsv_desc.Texture2DArray.FirstArraySlice = 0;
 				dsv_desc.Texture2DArray.ArraySize = 1;
 			}
+
+			ID3D11DepthStencilView* depth_stencil_view;
 			TIF(d3d_11_device->CreateDepthStencilView(depth_stencil_.get(), &dsv_desc, &depth_stencil_view));
-			depth_stencil_view_right_eye_ = MakeCOMPtr(depth_stencil_view);
+			depth_stencil_view_ = MakeCOMPtr(depth_stencil_view);
+
+			if (stereo)
+			{
+				if (bb_desc.SampleDesc.Count > 1)
+				{
+					dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
+					dsv_desc.Texture2DMSArray.FirstArraySlice = 1;
+					dsv_desc.Texture2DMSArray.ArraySize = 1;
+				}
+				else
+				{
+					dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+					dsv_desc.Texture2DArray.MipSlice = 0;
+					dsv_desc.Texture2DArray.FirstArraySlice = 1;
+					dsv_desc.Texture2DArray.ArraySize = 1;
+				}
+				TIF(d3d_11_device->CreateDepthStencilView(depth_stencil_.get(), &dsv_desc, &depth_stencil_view));
+				depth_stencil_view_right_eye_ = MakeCOMPtr(depth_stencil_view);
+			}
 		}
 
 		if (!!stereo_amd_qb_ext_)
